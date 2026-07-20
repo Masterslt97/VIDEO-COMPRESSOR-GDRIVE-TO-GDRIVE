@@ -5,6 +5,8 @@ on:
   push:
     branches: [main]
 
+# Only one run at a time
+
 concurrency:
   group: video-compress-group
   cancel-in-progress: false
@@ -30,10 +32,9 @@ jobs:
       - name: Setup rclone Config
         run: |
           mkdir -p ~/.config/rclone
-          cat > ~/.config/rclone/rclone.conf << 'RCLONE_EOF'
-${{ secrets.RCLONE_CONF }}
-RCLONE_EOF
-          rclone config file
+          printf '%s\n' "$RCLONE_CONF" > ~/.config/rclone/rclone.conf
+        env:
+          RCLONE_CONF: ${{ secrets.RCLONE_CONF }}
 
       - name: Download Previous Compression Records
         env:
