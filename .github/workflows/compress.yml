@@ -1,0 +1,53 @@
+name: GDrive Video Compressor
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  compress:
+    runs-on: ubuntu-latest
+
+    env:
+      GDRIVE_LINKS: ${{ secrets.GDRIVE_LINKS }}
+      GH_PAT: ${{ secrets.GH_PAT }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
+          curl -s https://rclone.org/install.sh | sudo bash
+          pip install requests gdown
+
+      - name: Setup rclone Config
+        run: |
+          mkdir -p ~/.config/rclone
+          echo "${{ secrets.RCLONE_CONF }}" > ~/.config/rclone/rclone.conf
+
+      - name: Download Previous Compression Records
+        run: |
+          echo "${{ secrets.GH_PAT }}" | gh auth login --with-token
+          mkdir -p prev_records
+          gh run download --repo ${{ github.repository }} \
+            --name compression_records \
+            --dir ./prev_records/ 2>/dev/null \
+            && echo "Found previous records" \
+            || echo "No previous records found, starting fresh"
+
+      - name: Process Videos (Download → Compress → Upload → Record)
+        run: python scripts/process_videos.py
+        env:
+          GH_PAT: ${{ secrets.GH_PAT }}
+          GDRIVE_LINKS: ${{ secrets.GDRIVE_LINKS }}
+
+      - name: Upload Final Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: compression_records
+          path: records.json
+          overwrite: true
+          if-no-files-found: ignore
