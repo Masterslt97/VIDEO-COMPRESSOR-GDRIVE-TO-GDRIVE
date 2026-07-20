@@ -70,15 +70,29 @@ def load_previous_records():
     log('📖 No previous records, starting fresh')
     return []
 
-def download_video(file_id):
-    log('⬇️ Downloading from GDrive (rclone)...')
-    subprocess.run(
+def download_video(file_id, url=None):
+    log('⬇️ Trying rclone backend copyid...')
+    result = subprocess.run(
         ['rclone', 'backend', 'copyid', 'gdrive:', file_id, './downloads/', '-P'],
-        check=True
+        capture_output=True, text=True
     )
     files = os.listdir('downloads')
+    files = [f for f in files if os.path.isfile(os.path.join('downloads', f))]
+    if result.returncode == 0 and files:
+        log(f'✅ rclone download success: {files[0]}')
+        return os.path.join('downloads', files[0])
+
+    log('⚠️ rclone failed, falling back to gdown...')
+    for path in Path('downloads').iterdir():
+        path.unlink()
+    if not url:
+        raise Exception('No URL provided for gdown fallback')
+    subprocess.run(['gdown', url, '-O', './downloads/', '--fuzzy', '--remaining-ok'], check=True)
+    files = os.listdir('downloads')
+    files = [f for f in files if os.path.isfile(os.path.join('downloads', f))]
     if not files:
-        raise Exception('No file downloaded')
+        raise Exception('No file downloaded via gdown')
+    log(f'✅ gdown download success: {files[0]}')
     return os.path.join('downloads', files[0])
 
 def compress_video(inp, out):
@@ -141,7 +155,7 @@ def main():
 
             try:
                 # Download
-                input_path = download_video(file_id)
+                input_path = download_video(file_id, url)
                 orig_size = os.path.getsize(input_path)
                 log(f'📁 Original: {os.path.basename(input_path)} ({orig_size / 1048576:.2f} MB)')
 
