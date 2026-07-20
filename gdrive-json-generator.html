@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GDrive JSON Secrets Generator</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: #0d1117;
+  color: #c9d1d9;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+}
+.container {
+  background: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 12px;
+  padding: 32px;
+  width: 100%;
+  max-width: 700px;
+}
+h1 {
+  font-size: 22px;
+  margin-bottom: 6px;
+  color: #f0f6fc;
+}
+.subtitle {
+  font-size: 13px;
+  color: #8b949e;
+  margin-bottom: 24px;
+}
+label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  color: #c9d1d9;
+  margin-bottom: 6px;
+}
+input, textarea {
+  width: 100%;
+  padding: 8px 12px;
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  color: #c9d1d9;
+  font-size: 14px;
+  font-family: 'SF Mono', Monaco, monospace;
+  outline: none;
+  transition: border-color .2s;
+}
+input:focus, textarea:focus { border-color: #58a6ff; }
+textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+.form-group { margin-bottom: 16px; }
+.helper {
+  font-size: 12px;
+  color: #8b949e;
+  margin-top: 4px;
+}
+.btn-row {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+button {
+  padding: 8px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity .2s;
+}
+button:hover { opacity: .85; }
+.btn-primary {
+  background: #238636;
+  color: #fff;
+}
+.btn-secondary {
+  background: #21262d;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+}
+.btn-danger {
+  background: #da3633;
+  color: #fff;
+}
+.output {
+  margin-top: 20px;
+}
+.output-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.output-header label { margin-bottom: 0; }
+.copy-btn {
+  background: #21262d;
+  color: #c9d1d9;
+  border: 1px solid #30363d;
+  padding: 4px 14px;
+  font-size: 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.copy-btn.copied { background: #238636; border-color: #238636; color: #fff; }
+pre {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 12px 16px;
+  font-family: 'SF Mono', Monaco, monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-x: auto;
+  min-height: 40px;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.preview-box {
+  background: #0d1117;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  padding: 12px 16px;
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+.preview-box .key { color: #79c0ff; }
+.preview-box .string { color: #a5d6ff; }
+.preview-box .num { color: #79c0ff; }
+.preview-box .bracket { color: #f0f6fc; }
+.preview-box .comma { color: #8b949e; }
+.link-entry {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 6px;
+  align-items: center;
+}
+.link-entry input { flex: 1; }
+.link-entry .remove-link {
+  background: none;
+  border: 1px solid #30363d;
+  color: #f85149;
+  padding: 4px 10px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+}
+.link-entry .remove-link:hover { background: #da3633; color: #fff; }
+.add-link-btn {
+  background: none;
+  border: 1px dashed #30363d;
+  color: #58a6ff;
+  padding: 6px 14px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  width: 100%;
+  text-align: center;
+  margin-top: 4px;
+}
+.add-link-btn:hover { border-color: #58a6ff; background: #1c2128; }
+.footer-note {
+  margin-top: 16px;
+  padding: 10px 14px;
+  background: #1c2128;
+  border: 1px solid #30363d;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #8b949e;
+  line-height: 1.5;
+}
+.footer-note code {
+  background: #0d1117;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 12px;
+  color: #f0f6fc;
+}
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>GDrive JSON Secrets Generator</h1>
+  <p class="subtitle">Convert GDrive links → JSON format for <code>GDRIVE_LINKS</code> secret</p>
+
+  <div class="form-group">
+    <label for="folderName">Folder Name</label>
+    <input type="text" id="folderName" placeholder="e.g. My Videos, Movies, etc." value="My Videos">
+    <div class="helper">Compressed videos will be uploaded to this folder on GDrive</div>
+  </div>
+
+  <div class="form-group">
+    <label>GDrive Links</label>
+    <div id="linksContainer">
+      <div class="link-entry">
+        <input type="url" class="gdrive-link" placeholder="https://drive.google.com/file/d/..." value="https://drive.google.com/file/d/1NU33l5dCVHWJzkwAidw7l0BnO-Q0GpQX/view?usp=drivesdk">
+        <button class="remove-link" onclick="removeLink(this)">×</button>
+      </div>
+    </div>
+    <button class="add-link-btn" onclick="addLink()">+ Add another link</button>
+    <div class="helper" style="margin-top:6px">Paste full Google Drive shareable links</div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn-primary" onclick="generateJSON()">Generate JSON</button>
+    <button class="btn-secondary" onclick="clearAll()">Clear All</button>
+  </div>
+
+  <div class="output" id="outputSection" style="display:none">
+    <div class="output-header">
+      <label>Generated JSON (copy this → <code>GDRIVE_LINKS</code> secret)</label>
+      <button class="copy-btn" id="copyBtn" onclick="copyJSON()">Copy</button>
+    </div>
+    <pre id="jsonOutput"></pre>
+    <div class="preview-box" id="previewBox"></div>
+  </div>
+
+  <div class="footer-note">
+    <strong>How to use:</strong><br>
+    1. Set folder name (e.g. "My Videos")<br>
+    2. Paste your GDrive shareable links (one per field)<br>
+    3. Click <strong>Generate JSON</strong> → copy the output<br>
+    4. Add as <code>GDRIVE_LINKS</code> in GitHub → Settings → Secrets and variables → Actions<br><br>
+    <strong>Example output:</strong>
+    <code>{"My Videos":["https://drive.google.com/file/d/1abc123/view","https://drive.google.com/file/d/2def456/view"]}</code>
+  </div>
+</div>
+
+<script>
+function addLink(value) {
+  const container = document.getElementById('linksContainer');
+  const entry = document.createElement('div');
+  entry.className = 'link-entry';
+  entry.innerHTML = `
+    <input type="url" class="gdrive-link" placeholder="https://drive.google.com/file/d/..." value="${value || ''}">
+    <button class="remove-link" onclick="removeLink(this)">×</button>
+  `;
+  container.appendChild(entry);
+}
+
+function removeLink(btn) {
+  const entries = document.querySelectorAll('.link-entry');
+  if (entries.length <= 1) return;
+  btn.closest('.link-entry').remove();
+}
+
+function clearAll() {
+  document.getElementById('folderName').value = 'My Videos';
+  const container = document.getElementById('linksContainer');
+  container.innerHTML = '';
+  addLink('');
+  document.getElementById('outputSection').style.display = 'none';
+}
+
+function generateJSON() {
+  const folder = document.getElementById('folderName').value.trim();
+  if (!folder) {
+    document.getElementById('folderName').focus();
+    document.getElementById('folderName').style.borderColor = '#da3633';
+    setTimeout(() => document.getElementById('folderName').style.borderColor = '', 2000);
+    return;
+  }
+
+  const links = [...document.querySelectorAll('.gdrive-link')]
+    .map(el => el.value.trim())
+    .filter(v => v.length > 0);
+
+  if (!links.length) {
+    alert('Please add at least one GDrive link');
+    return;
+  }
+
+  const obj = { [folder]: links };
+  const json = JSON.stringify(obj, null, 2);
+
+  document.getElementById('jsonOutput').textContent = json;
+  document.getElementById('outputSection').style.display = 'block';
+
+  // Show preview
+  const preview = document.getElementById('previewBox');
+  const compact = JSON.stringify(obj);
+  preview.innerHTML = `<strong>Compact (for secret):</strong><br><code>${escapeHtml(compact)}</code><br><br><strong>File IDs detected:</strong><br>${links.map((l, i) => {
+    const id = extractFileId(l);
+    return `  ${i + 1}. ${id ? `<span style="color:#7ee787">${id}</span>` : `<span style="color:#f85149">Could not extract ID</span>`}`;
+  }).join('<br>')}`;
+
+  document.getElementById('copyBtn').textContent = 'Copy';
+  document.getElementById('copyBtn').className = 'copy-btn';
+}
+
+function extractFileId(url) {
+  const patterns = [
+    /\/file\/d\/([a-zA-Z0-9_-]+)/,
+    /id=([a-zA-Z0-9_-]+)/,
+    /\/open\?id=([a-zA-Z0-9_-]+)/,
+    /\/d\/([a-zA-Z0-9_-]+)/
+  ];
+  for (const p of patterns) {
+    const m = url.match(p);
+    if (m) return m[1];
+  }
+  return null;
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function copyJSON() {
+  const text = document.getElementById('jsonOutput').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copyBtn');
+    btn.textContent = 'Copied!';
+    btn.className = 'copy-btn copied';
+    setTimeout(() => {
+      btn.textContent = 'Copy';
+      btn.className = 'copy-btn';
+    }, 2000);
+  }).catch(() => {
+    // Fallback
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+    const btn = document.getElementById('copyBtn');
+    btn.textContent = 'Copied!';
+    btn.className = 'copy-btn copied';
+    setTimeout(() => {
+      btn.textContent = 'Copy';
+      btn.className = 'copy-btn';
+    }, 2000);
+  });
+}
+
+// Auto-generate on load
+window.addEventListener('DOMContentLoaded', () => generateJSON());
+</script>
+</body>
+</html>
