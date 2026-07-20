@@ -1,4 +1,4 @@
-import json, os, re, subprocess, sys, io, zipfile, time
+import json, os, re, subprocess, sys, io, zipfile, time, requests
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -22,6 +22,22 @@ def extract_file_id(url):
             return m.group(1)
     return None
 
+def delete_existing_artifact(name, headers):
+    r = requests.get(
+        f'https://api.github.com/repos/{GITHUB_REPO}/actions/runs/{GITHUB_RUN_ID}/artifacts',
+        headers=headers
+    )
+    if r.status_code != 200:
+        return
+    for art in r.json().get('artifacts', []):
+        if art['name'] == name:
+            d = requests.delete(
+                f'https://api.github.com/repos/{GITHUB_REPO}/actions/artifacts/{art["id"]}',
+                headers=headers
+            )
+            if d.status_code == 204:
+                log(f'🗑️ Deleted old artifact "{name}" (id: {art["id"]})')
+
 def upload_artifact_via_api(filepath, name):
     if not GH_PAT:
         log('⚠️ GH_PAT not set, skipping artifact upload')
@@ -32,21 +48,18 @@ def upload_artifact_via_api(filepath, name):
         zf.write(filepath, os.path.basename(filepath))
     buf.seek(0)
 
-    import requests
     headers = {
         'Authorization': f'token {GH_PAT}',
         'Accept': 'application/vnd.github.v3+json',
     }
+
+    delete_existing_artifact(name, headers)
 
     r = requests.post(
         f'https://api.github.com/repos/{GITHUB_REPO}/actions/runs/{GITHUB_RUN_ID}/artifacts',
         headers=headers,
         json={'name': name, 'archive_format': 'zip'}
     )
-
-    if r.status_code == 409:
-        log('ℹ️ Artifact already exists this run, will overwrite at end')
-        return
 
     r.raise_for_status()
     data = r.json()
@@ -58,7 +71,7 @@ def upload_artifact_via_api(filepath, name):
         data=buf.getvalue()
     )
     r2.raise_for_status()
-    log(f'✅ Artifact "{name}" updated')
+    log(f'✅ Artifact "{name}" overwritten')
 
 def load_previous_records():
     records_path = './prev_records/compression_records.json'
