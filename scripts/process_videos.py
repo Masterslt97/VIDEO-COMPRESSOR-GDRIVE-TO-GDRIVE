@@ -1,10 +1,10 @@
-import json, os, re, subprocess, sys, io, zipfile, time, requests
+import json, os, re, subprocess, sys
 from datetime import datetime, timezone
 from pathlib import Path
 
 GITHUB_REPO = os.environ.get('GITHUB_REPOSITORY', '')
-GITHUB_RUN_ID = os.environ.get('GITHUB_RUN_ID', '')
 GH_PAT = os.environ.get('GH_PAT', '')
+RECORDS_FILE = 'compression_records.json'
 
 def log(msg):
     print(f'[{datetime.now().strftime("%H:%M:%S")}] {msg}', flush=True)
@@ -22,66 +22,43 @@ def extract_file_id(url):
             return m.group(1)
     return None
 
-def delete_existing_artifact(name, headers):
-    r = requests.get(
-        f'https://api.github.com/repos/{GITHUB_REPO}/actions/runs/{GITHUB_RUN_ID}/artifacts',
-        headers=headers
-    )
-    if r.status_code != 200:
-        return
-    for art in r.json().get('artifacts', []):
-        if art['name'] == name:
-            d = requests.delete(
-                f'https://api.github.com/repos/{GITHUB_REPO}/actions/artifacts/{art["id"]}',
-                headers=headers
-            )
-            if d.status_code == 204:
-                log(f'🗑️ Deleted old artifact "{name}" (id: {art["id"]})')
-
-def upload_artifact_via_api(filepath, name):
-    if not GH_PAT:
-        log('⚠️ GH_PAT not set, skipping artifact upload')
-        return
-
-    buf = io.BytesIO()
-    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
-        zf.write(filepath, os.path.basename(filepath))
-    buf.seek(0)
-
-    headers = {
-        'Authorization': f'token {GH_PAT}',
-        'Accept': 'application/vnd.github.v3+json',
-    }
-
-    delete_existing_artifact(name, headers)
-
-    r = requests.post(
-        f'https://api.github.com/repos/{GITHUB_REPO}/actions/runs/{GITHUB_RUN_ID}/artifacts',
-        headers=headers,
-        json={'name': name, 'archive_format': 'zip'}
-    )
-
-    r.raise_for_status()
-    data = r.json()
-    upload_url = data['upload_url'].replace('{?name,archive_format}', '')
-
-    r2 = requests.put(
-        upload_url,
-        headers={'Authorization': f'token {GH_PAT}', 'Content-Type': 'application/zip'},
-        data=buf.getvalue()
-    )
-    r2.raise_for_status()
-    log(f'✅ Artifact "{name}" overwritten')
-
 def load_previous_records():
-    records_path = './prev_records/compression_records.json'
-    if os.path.exists(records_path):
-        with open(records_path) as f:
+    if os.path.exists(RECORDS_FILE):
+        with open(RECORDS_FILE) as f:
             records = json.load(f)
         log(f'📖 Loaded {len(records)} previous record(s)')
         return records
     log('📖 No previous records, starting fresh')
     return []
+
+def commit_and_push_records(records):
+    with open(RECORDS_FILE, 'w') as f:
+        json.dump(records, f, indent=2)
+    log(f'📝 Records saved to {RECORDS_FILE} ({len(records)} total)')
+
+    if not GH_PAT:
+        log('⚠️ GH_PAT not set, skipping commit+push')
+        return
+
+    uploaded = sum(1 for r in records if r.get('status') == 'uploaded')
+    failed = sum(1 for r in records if r.get('status') == 'failed')
+
+    subprocess.run(['git', 'config', 'user.name', 'Masterslt97'], capture_output=True)
+    subprocess.run(['git', 'config', 'user.email', 'masterslt97@users.noreply.github.com'], capture_output=True)
+    subprocess.run(['git', 'pull', '--rebase', 'origin', 'main'], capture_output=True)
+    subprocess.run(['git', 'add', RECORDS_FILE], capture_output=True)
+    r = subprocess.run(
+        ['git', 'commit', '-m', f'[skip ci] records: {uploaded} uploaded, {failed} failed, {len(records)} total'],
+        capture_output=True, text=True
+    )
+    if r.returncode != 0 and 'nothing to commit' not in r.stderr and 'nothing to commit' not in r.stdout:
+        log(f'⚠️ Commit issue: {r.stderr.strip() or r.stdout.strip()}')
+        return
+    if 'nothing to commit' in r.stderr or 'nothing to commit' in r.stdout:
+        return
+
+    subprocess.run(['git', 'push', 'origin', 'main'], capture_output=True)
+    log(f'✅ Committed & pushed {RECORDS_FILE} to repo')
 
 def download_video(file_id, url=None):
     log('⬇️ Trying rclone backend copyid...')
@@ -164,6 +141,7 @@ def main():
                     'error': 'Invalid GDrive URL - could not extract file ID',
                     'timestamp': datetime.now(timezone.utc).isoformat()
                 })
+                commit_and_push_records(records)
                 continue
 
             try:
@@ -208,6 +186,7 @@ def main():
                     'error': str(e),
                     'timestamp': datetime.now(timezone.utc).isoformat()
                 })
+                commit_and_push_records(records)
                 continue
 
             except Exception as e:
@@ -219,17 +198,11 @@ def main():
                     'error': str(e),
                     'timestamp': datetime.now(timezone.utc).isoformat()
                 })
+                commit_and_push_records(records)
                 continue
 
-            # Save & upload artifact after each successful video
-            with open('records.json', 'w') as f:
-                json.dump(records, f, indent=2)
-            log(f'📝 Records saved ({len(records)} total)')
-
-            try:
-                upload_artifact_via_api('records.json', 'compression_records')
-            except Exception as e:
-                log(f'⚠️ Artifact upload failed (will retry at end): {e}')
+            # Save, commit & push records to repo after each upload
+            commit_and_push_records(records)
 
             # Cleanup for next video
             for path in Path('downloads').iterdir():
@@ -241,8 +214,7 @@ def main():
 
     # Final save
     if records:
-        with open('records.json', 'w') as f:
-            json.dump(records, f, indent=2)
+        commit_and_push_records(records)
 
         uploaded = sum(1 for r in records if r.get('status') == 'uploaded')
         failed = sum(1 for r in records if r.get('status') == 'failed')
