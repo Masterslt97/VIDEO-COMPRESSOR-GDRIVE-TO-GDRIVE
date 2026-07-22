@@ -1,0 +1,10 @@
+[
+  {
+    "video_name": "view?usp=drivesdk",
+    "gdrive_link": "https://drive.google.com/file/d/1YepRaHLsMhQRiolxGJ1CES2EVgokMKzD/view?usp=drivesdk",
+    "folder": "compressed",
+    "status": "failed",
+    "error": "Command '['gdown', 'https://drive.google.com/file/d/1YepRaHLsMhQRiolxGJ1CES2EVgokMKzD/view?usp=drivesdk', '-O', './downloads/', '--fuzzy', '--remaining-ok']' returned non-zero exit status 2.",
+    "timestamp": "2026-07-22T15:47:26.479712+00:00"
+  }
+]
